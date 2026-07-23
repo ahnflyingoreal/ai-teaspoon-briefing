@@ -16,6 +16,15 @@
 const POSTS = [
   {
     date: "2026-07-22",
+    title: "AI 시대, 유아교육이 지켜야 할 힘",
+    subtitle: "기술의 속도가 곧 교육의 속도는 아닙니다",
+    summary: "AI 시대의 유아교육은 새로운 기술을 빨리 도입하는 것보다 아이의 질문, 협력, 자기 조절, 스스로 배우는 힘을 기르는 데 집중해야 합니다. 교사는 AI와 디지털 도구를 사용할 때 목적과 입력 자료 보호, 검토 책임 기준을 분명히 세워야 합니다.",
+    tags: ["일일 브리핑","AI 유아교육","미래역량"],
+    pdf: "https://drive.google.com/file/d/1pvXWfA7BA-0Edy4QlifpC5BxDKPuvOLt/view?usp=sharing",
+    thumb: "assets/thumbs/2026-07-22.jpg",
+  },
+  {
+    date: "2026-07-22",
     title: "AI, 막상 써 보니 어렵지 않았다",
     subtitle: "“이 정도면 나도 쓰겠네”",
     summary: "교사가 AI를 계속 쓴 이유는 거창하지 않았습니다. 내 일 하나를 직접 해 보고 결과를 고쳐\n보며 “쓸 만하네”라고 느낀 작은 경험이 시작이었습니다.",
