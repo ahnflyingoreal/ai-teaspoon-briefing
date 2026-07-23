@@ -41,6 +41,24 @@
   .autofill-box { background: var(--paper); border: 1px dashed var(--ochre); border-radius: 4px; padding: 18px; margin-bottom: 24px; }
   .autofill-box .title { font-weight: 600; margin-bottom: 4px; }
   #thumb-preview { max-width: 160px; border-radius: 4px; border: 1px solid var(--line-soft); margin-top: 10px; display: none; }
+  .post-row {
+    display: flex; align-items: center; gap: 12px; padding: 10px 0;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .post-row:last-child { border-bottom: none; }
+  .post-row .pdate { font-family: var(--mono); font-size: 12px; color: var(--ink-soft); width: 78px; flex-shrink: 0; }
+  .post-row .ptitle { flex: 1; font-size: 14px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .post-row .prow-btns { display: flex; gap: 6px; flex-shrink: 0; }
+  .post-row button { padding: 6px 12px; font-size: 12.5px; }
+  .btn-edit { background: var(--teal); color: var(--paper-raised); }
+  .btn-del { background: transparent; color: #a3402c; border: 1px solid #a3402c; }
+  .btn-refresh { background: var(--ink-soft); color: var(--paper-raised); }
+  .editing-banner {
+    background: #fff3d6; border: 1px solid var(--ochre); border-radius: 4px;
+    padding: 10px 14px; font-size: 13px; margin-bottom: 16px; display: none;
+    align-items: center; justify-content: space-between; gap: 10px;
+  }
+  .editing-banner.show { display: flex; }
 </style>
 </head>
 <body>
@@ -76,6 +94,18 @@
       <div class="cfg-saved" id="cfg-saved-msg"></div>
     </fieldset>
 
+    <fieldset>
+      <legend>② 발행된 글 목록</legend>
+      <button class="btn-refresh" onclick="loadPostsList()">불러오기 / 새로고침</button>
+      <div id="post-list" style="margin-top: 14px;"></div>
+      <div id="list-status" class="hint"></div>
+    </fieldset>
+
+    <div class="editing-banner" id="editing-banner">
+      <span id="editing-banner-text"></span>
+      <button class="btn-clear" onclick="cancelEdit()">취소하고 새 글 작성</button>
+    </div>
+
     <div class="autofill-box">
       <div class="title">PDF로 자동 채우기</div>
       <p class="hint">오늘 만든 PDF를 선택하면 제목·부제·요약·태그와 표지 썸네일까지 AI가 자동으로 채워줍니다. 채워진 내용은 아래에서 검토하고 고쳐도 됩니다.</p>
@@ -86,7 +116,7 @@
     </div>
 
     <fieldset>
-      <legend>② 오늘의 브리핑</legend>
+      <legend id="form-legend">③ 오늘의 브리핑</legend>
       <div class="row2">
         <div>
           <label>날짜</label>
@@ -111,7 +141,7 @@
       <p class="hint">여기서 파일을 고르면 자동 생성된 썸네일 대신 이 이미지가 우선 사용됩니다.</p>
     </fieldset>
 
-    <button class="btn-publish" id="publish-btn" onclick="publish()">발행하기</button>
+    <button class="btn-publish" id="publish-btn" onclick="publish()"><span id="publish-btn-text">발행하기</span></button>
     <div id="status"></div>
   </div>
 
@@ -197,6 +227,221 @@ function blobToBase64(blob) {
   });
 }
 
+// ─── posts.js 파싱/직렬화 ───────────────────────────────────
+const POSTS_MARKER = "const POSTS = [";
+
+function parsePostsFile(text) {
+  const idx = text.indexOf(POSTS_MARKER);
+  if (idx === -1) {
+    throw new Error("posts.js에서 'const POSTS = [' 구문을 찾지 못했습니다.");
+  }
+  const header = text.slice(0, idx);
+  const tail = text.slice(idx); // "const POSTS = [ ... ];\n"
+  let arr;
+  try {
+    arr = new Function(tail + "\nreturn POSTS;")();
+  } catch (e) {
+    throw new Error("posts.js 형식을 해석하지 못했습니다: " + e.message);
+  }
+  return { header, posts: arr };
+}
+
+function postToEntryText(p) {
+  return (
+    "  {\n" +
+    `    date: ${JSON.stringify(p.date)},\n` +
+    `    title: ${JSON.stringify(p.title)},\n` +
+    `    subtitle: ${p.subtitle === null || p.subtitle === undefined ? "null" : JSON.stringify(p.subtitle)},\n` +
+    `    summary: ${JSON.stringify(p.summary)},\n` +
+    `    tags: ${JSON.stringify(p.tags || [])},\n` +
+    `    pdf: ${JSON.stringify(p.pdf)},\n` +
+    `    thumb: ${p.thumb === null || p.thumb === undefined ? "null" : JSON.stringify(p.thumb)},\n` +
+    "  },\n"
+  );
+}
+
+function serializePostsFile(header, posts) {
+  return header + POSTS_MARKER + "\n" + posts.map(postToEntryText).join("") + "];\n";
+}
+
+// ─── 발행된 글 목록 ─────────────────────────────────────────
+let postsCache = [];
+let postsHeader = "";
+let postsSha = null;
+
+function setListStatus(msg, type) {
+  const el = document.getElementById("list-status");
+  el.textContent = msg;
+  el.className = "hint " + (type || "");
+}
+
+async function loadPostsList() {
+  const cfg = loadConfig();
+  if (!cfg || !cfg.owner || !cfg.repo || !cfg.token) {
+    setListStatus("먼저 ① 저장소 연결 정보를 저장해주세요.", "err");
+    return;
+  }
+  setListStatus("불러오는 중...", "");
+  try {
+    const file = await githubGet(cfg, "assets/posts.js");
+    const text = b64DecodeUnicode(file.content);
+    const parsed = parsePostsFile(text);
+    postsHeader = parsed.header;
+    postsCache = parsed.posts;
+    postsSha = file.sha;
+    renderPostsList();
+    setListStatus(`${postsCache.length}개를 불러왔습니다.`, "ok");
+  } catch (err) {
+    setListStatus("오류: " + err.message, "err");
+  }
+}
+
+function renderPostsList() {
+  const root = document.getElementById("post-list");
+  if (postsCache.length === 0) {
+    root.innerHTML = `<p class="hint">발행된 글이 없습니다.</p>`;
+    return;
+  }
+  const sorted = postsCache
+    .map((p, i) => ({ ...p, _idx: i }))
+    .sort((a, b) => (a.date < b.date ? 1 : -1));
+
+  root.innerHTML = sorted
+    .map(
+      (p) => `
+    <div class="post-row">
+      <span class="pdate">${p.date}</span>
+      <span class="ptitle">${escapeHtml(p.title)}</span>
+      <div class="prow-btns">
+        <button class="btn-edit" onclick="startEdit(${p._idx})">편집</button>
+        <button class="btn-del" onclick="deleteEntry(${p._idx})">삭제</button>
+      </div>
+    </div>`
+    )
+    .join("");
+}
+
+function escapeHtml(str) {
+  const div = document.createElement("div");
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// ─── 편집 모드 ──────────────────────────────────────────────
+let editingOriginalDate = null;
+let editingOriginalTitle = null;
+let editingOriginalThumb = null;
+
+function startEdit(index) {
+  const p = postsCache[index];
+  if (!p) return;
+
+  editingOriginalDate = p.date;
+  editingOriginalTitle = p.title;
+  editingOriginalThumb = p.thumb || null;
+  autoThumbBlob = null;
+
+  document.getElementById("f-date").value = p.date;
+  document.getElementById("f-title").value = p.title;
+  document.getElementById("f-subtitle").value = p.subtitle || "";
+  document.getElementById("f-summary").value = p.summary || "";
+  document.getElementById("f-tags").value = (p.tags || []).join(", ");
+  document.getElementById("f-pdf").value = p.pdf || "";
+  document.getElementById("f-thumb").value = "";
+  document.getElementById("auto-pdf").value = "";
+
+  const preview = document.getElementById("thumb-preview");
+  if (editingOriginalThumb) {
+    preview.src = editingOriginalThumb;
+    preview.style.display = "block";
+  } else {
+    preview.style.display = "none";
+    preview.src = "";
+  }
+
+  document.getElementById("form-legend").textContent = "③ 글 수정하기";
+  document.getElementById("publish-btn-text").textContent = "수정 저장하기";
+  const banner = document.getElementById("editing-banner");
+  banner.classList.add("show");
+  document.getElementById("editing-banner-text").textContent =
+    `"${p.title}" (${p.date}) 글을 수정하는 중입니다.`;
+
+  setStatus("", "");
+  document.querySelector(".autofill-box").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function cancelEdit() {
+  editingOriginalDate = null;
+  editingOriginalTitle = null;
+  editingOriginalThumb = null;
+  autoThumbBlob = null;
+
+  document.getElementById("f-title").value = "";
+  document.getElementById("f-subtitle").value = "";
+  document.getElementById("f-summary").value = "";
+  document.getElementById("f-tags").value = "";
+  document.getElementById("f-pdf").value = "";
+  document.getElementById("f-thumb").value = "";
+  document.getElementById("auto-pdf").value = "";
+  document.getElementById("f-date").value = new Date().toISOString().slice(0, 10);
+  document.getElementById("thumb-preview").style.display = "none";
+  document.getElementById("thumb-preview").src = "";
+
+  document.getElementById("form-legend").textContent = "③ 오늘의 브리핑";
+  document.getElementById("publish-btn-text").textContent = "발행하기";
+  document.getElementById("editing-banner").classList.remove("show");
+  setStatus("", "");
+  setAutoStatus("", "");
+}
+
+async function deleteEntry(index) {
+  const cfg = loadConfig();
+  if (!cfg || !cfg.owner || !cfg.repo || !cfg.token) {
+    setListStatus("먼저 ① 저장소 연결 정보를 저장해주세요.", "err");
+    return;
+  }
+  const p = postsCache[index];
+  if (!p) return;
+  if (!confirm(`"${p.title}" (${p.date}) 항목을 삭제할까요?\n이 작업은 되돌릴 수 없습니다.`)) {
+    return;
+  }
+
+  setListStatus("삭제 중...", "");
+  try {
+    // 항상 최신 상태를 다시 받아서 삭제 (동시 편집으로 인한 충돌 방지)
+    const file = await githubGet(cfg, "assets/posts.js");
+    const text = b64DecodeUnicode(file.content);
+    const parsed = parsePostsFile(text);
+    const newPosts = parsed.posts.filter(
+      (x) => !(x.date === p.date && x.title === p.title)
+    );
+    if (newPosts.length === parsed.posts.length) {
+      throw new Error("삭제할 항목을 찾지 못했습니다. 목록을 새로고침 해보세요.");
+    }
+    const newText = serializePostsFile(parsed.header, newPosts);
+    const encoded = b64EncodeUnicode(newText);
+    const result = await githubPut(
+      cfg,
+      "assets/posts.js",
+      encoded,
+      `브리핑 삭제: ${p.date} ${p.title}`,
+      file.sha
+    );
+
+    postsHeader = parsed.header;
+    postsCache = newPosts;
+    postsSha = result.content.sha;
+    renderPostsList();
+    setListStatus("삭제했습니다. 1~2분 뒤 사이트에 반영돼요.", "ok");
+
+    if (editingOriginalDate === p.date && editingOriginalTitle === p.title) {
+      cancelEdit();
+    }
+  } catch (err) {
+    setListStatus("오류: " + err.message, "err");
+  }
+}
+
 let autoThumbBlob = null;
 
 function setAutoStatus(msg, type) {
@@ -205,10 +450,20 @@ function setAutoStatus(msg, type) {
   el.className = type || "";
 }
 
-pdfjsLib.GlobalWorkerOptions.workerSrc =
-  "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+function ensurePdfJsReady() {
+  if (typeof pdfjsLib === "undefined") {
+    throw new Error(
+      "PDF 처리 라이브러리(pdf.js)를 불러오지 못했습니다. 인터넷 연결을 확인하거나, 광고 차단 확장 프로그램을 잠시 꺼본 뒤 새로고침 해보세요."
+    );
+  }
+  if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+  }
+}
 
 async function extractPdfTextAndDoc(file) {
+  ensurePdfJsReady();
   const buf = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
   let text = "";
@@ -381,6 +636,7 @@ async function publish() {
   const tagsRaw = document.getElementById("f-tags").value.trim();
   const pdf = document.getElementById("f-pdf").value.trim();
   const thumbFile = document.getElementById("f-thumb").files[0];
+  const isEditing = editingOriginalDate !== null;
 
   if (!date || !title || !summary || !pdf) {
     setStatus("날짜·제목·요약·PDF 링크는 필수예요.", "err");
@@ -392,10 +648,10 @@ async function publish() {
     : [];
 
   btn.disabled = true;
-  setStatus("발행 중...", "");
+  setStatus(isEditing ? "수정 저장 중..." : "발행 중...", "");
 
   try {
-    let thumbPath = null;
+    let thumbPath = isEditing ? editingOriginalThumb : null;
 
     if (thumbFile) {
       setStatus("썸네일 이미지 업로드 중...", "");
@@ -425,8 +681,10 @@ async function publish() {
     }
 
     setStatus("posts.js 갱신 중...", "");
+    // 항상 최신 상태를 다시 받아서 반영 (동시 편집으로 인한 충돌 방지)
     const postsFile = await githubGet(cfg, "assets/posts.js");
     const currentText = b64DecodeUnicode(postsFile.content);
+    const parsed = parsePostsFile(currentText);
 
     const entryObj = {
       date,
@@ -438,47 +696,44 @@ async function publish() {
       thumb: thumbPath,
     };
 
-    const entryText =
-      "  {\n" +
-      `    date: ${JSON.stringify(entryObj.date)},\n` +
-      `    title: ${JSON.stringify(entryObj.title)},\n` +
-      `    subtitle: ${entryObj.subtitle === null ? "null" : JSON.stringify(entryObj.subtitle)},\n` +
-      `    summary: ${JSON.stringify(entryObj.summary)},\n` +
-      `    tags: ${JSON.stringify(entryObj.tags)},\n` +
-      `    pdf: ${JSON.stringify(entryObj.pdf)},\n` +
-      `    thumb: ${entryObj.thumb === null ? "null" : JSON.stringify(entryObj.thumb)},\n` +
-      "  },\n";
-
-    const marker = /(const POSTS = \[\r?\n)/;
-    if (!marker.test(currentText)) {
-      throw new Error("posts.js에서 'const POSTS = [' 구문을 찾지 못했습니다. 파일 구조가 바뀌었는지 확인해주세요.");
+    let newPosts;
+    let commitMessage;
+    if (isEditing) {
+      const matchIdx = parsed.posts.findIndex(
+        (x) => x.date === editingOriginalDate && x.title === editingOriginalTitle
+      );
+      if (matchIdx === -1) {
+        throw new Error("수정하려는 글을 찾지 못했습니다. 목록을 새로고침한 뒤 다시 시도해주세요.");
+      }
+      newPosts = [...parsed.posts];
+      newPosts[matchIdx] = entryObj;
+      commitMessage = `브리핑 수정: ${date} ${title}`;
+    } else {
+      newPosts = [entryObj, ...parsed.posts];
+      commitMessage = `브리핑 추가: ${date} ${title}`;
     }
-    const updatedText = currentText.replace(marker, `$1${entryText}`);
+
+    const updatedText = serializePostsFile(parsed.header, newPosts);
     const updatedBase64 = b64EncodeUnicode(updatedText);
 
-    await githubPut(
+    const result = await githubPut(
       cfg,
       "assets/posts.js",
       updatedBase64,
-      `브리핑 추가: ${date} ${title}`,
+      commitMessage,
       postsFile.sha
     );
 
+    postsHeader = parsed.header;
+    postsCache = newPosts;
+    postsSha = result.content.sha;
+    renderPostsList();
+
     setStatus(
-      `발행 완료! "${title}" (${date})\n1~2분 뒤 사이트에서 확인해보세요.`,
+      `${isEditing ? "수정" : "발행"} 완료! "${title}" (${date})\n1~2분 뒤 사이트에서 확인해보세요.`,
       "ok"
     );
-    document.getElementById("f-title").value = "";
-    document.getElementById("f-subtitle").value = "";
-    document.getElementById("f-summary").value = "";
-    document.getElementById("f-tags").value = "";
-    document.getElementById("f-pdf").value = "";
-    document.getElementById("f-thumb").value = "";
-    document.getElementById("auto-pdf").value = "";
-    document.getElementById("thumb-preview").style.display = "none";
-    document.getElementById("thumb-preview").src = "";
-    autoThumbBlob = null;
-    setAutoStatus("", "");
+    cancelEdit();
   } catch (err) {
     setStatus("오류: " + err.message, "err");
   } finally {
@@ -489,6 +744,10 @@ async function publish() {
 document.addEventListener("DOMContentLoaded", () => {
   fillConfigForm();
   document.getElementById("f-date").value = new Date().toISOString().slice(0, 10);
+  const cfg = loadConfig();
+  if (cfg && cfg.owner && cfg.repo && cfg.token) {
+    loadPostsList();
+  }
 });
 </script>
 </body>
