@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>발행 — AI 한 숟가락</title>
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
+<link rel="stylesheet" href="assets/style.css" />
+<style>
+  .admin-wrap { max-width: 640px; margin: 0 auto; padding: 48px 24px 96px; }
+  .admin-wrap h1 { font-family: var(--serif); font-size: 30px; color: var(--teal-deep); margin: 0 0 6px; }
+  .admin-wrap .sub { color: var(--ink-soft); font-size: 14px; margin: 0 0 32px; }
+  fieldset { border: 1px solid var(--line); border-radius: 4px; padding: 20px 22px; margin: 0 0 28px; }
+  legend { font-family: var(--mono); font-size: 12px; letter-spacing: 0.06em; color: var(--teal); padding: 0 8px; }
+  label { display: block; font-size: 13px; color: var(--ink-soft); margin: 14px 0 5px; }
+  label:first-of-type { margin-top: 0; }
+  input[type="text"], input[type="date"], input[type="password"], textarea {
+    width: 100%; font-family: var(--sans); font-size: 14px; padding: 9px 11px;
+    border: 1px solid var(--line); border-radius: 3px; background: var(--paper-raised);
+    color: var(--ink); box-sizing: border-box;
+  }
+  textarea { min-height: 84px; resize: vertical; }
+  input[type="file"] { font-size: 13px; margin-top: 4px; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .hint { font-size: 12px; color: var(--ink-soft); margin-top: 5px; line-height: 1.5; }
+  button {
+    font-family: var(--sans); font-size: 14px; font-weight: 600; cursor: pointer;
+    border: none; border-radius: 3px; padding: 11px 20px;
+  }
+  .btn-save { background: var(--ink-soft); color: var(--paper-raised); }
+  .btn-publish { background: var(--teal-deep); color: var(--paper-raised); font-size: 15px; padding: 13px 26px; }
+  .btn-publish:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-clear { background: transparent; color: var(--ink-soft); border: 1px solid var(--line); }
+  #status { margin-top: 18px; font-size: 13.5px; line-height: 1.7; white-space: pre-wrap; }
+  #status.ok { color: var(--teal-deep); }
+  #status.err { color: #a3402c; }
+  .cfg-saved { font-size: 12px; color: var(--teal); margin-top: 6px; }
+</style>
+</head>
+<body>
+  <div class="admin-wrap">
+    <h1>발행하기</h1>
+    <p class="sub">여기서 입력하면 GitHub 저장소의 <code>assets/posts.js</code>에 바로 커밋됩니다. 1~2분 뒤 사이트에 반영돼요.</p>
+
+    <fieldset>
+      <legend>① 저장소 연결 (최초 1회만)</legend>
+      <label>GitHub 사용자명</label>
+      <input type="text" id="cfg-owner" placeholder="예: ahnflyingoreal" />
+      <label>저장소 이름</label>
+      <input type="text" id="cfg-repo" placeholder="예: ai-teaspoon" />
+      <label>브랜치</label>
+      <input type="text" id="cfg-branch" value="main" />
+      <label>Personal Access Token</label>
+      <input type="password" id="cfg-token" placeholder="github_pat_..." />
+      <p class="hint">
+        GitHub → 우측 상단 프로필 → Settings → Developer settings → Personal access tokens →
+        Fine-grained tokens → Generate new token. Repository access는 이 저장소 하나만 선택하고,
+        Permissions에서 <b>Contents: Read and write</b>만 켜면 됩니다.<br />
+        토큰은 이 브라우저에만 저장되고 다른 곳으로 전송되지 않습니다. 공용 컴퓨터에서는 쓰지 마세요.
+      </p>
+      <button class="btn-save" onclick="saveConfig()">저장</button>
+      <button class="btn-clear" onclick="clearConfig()">지우기</button>
+      <div class="cfg-saved" id="cfg-saved-msg"></div>
+    </fieldset>
+
+    <fieldset>
+      <legend>② 오늘의 브리핑</legend>
+      <div class="row2">
+        <div>
+          <label>날짜</label>
+          <input type="date" id="f-date" />
+        </div>
+        <div>
+          <label>태그 (쉼표로 구분)</label>
+          <input type="text" id="f-tags" placeholder="일일 브리핑, AI 교육" />
+        </div>
+      </div>
+      <label>제목</label>
+      <input type="text" id="f-title" placeholder="오늘 브리핑 제목" />
+      <label>부제 (없으면 비워두기)</label>
+      <input type="text" id="f-subtitle" placeholder="예: “이 정도면 나도 쓰겠네”" />
+      <label>요약 (두세 문장)</label>
+      <textarea id="f-summary"></textarea>
+      <label>PDF 링크</label>
+      <input type="text" id="f-pdf" placeholder="구글 드라이브 공유 링크 (https://drive.google.com/file/d/.../view)" />
+      <label>표지 썸네일 이미지 (선택, 정사각형에 가까운 이미지 권장)</label>
+      <input type="file" id="f-thumb" accept="image/*" />
+      <p class="hint">이미지를 고르면 assets/thumbs/날짜.jpg로 저장소에 함께 올라갑니다. 안 고르면 텍스트만 있는 카드가 됩니다.</p>
+    </fieldset>
+
+    <button class="btn-publish" id="publish-btn" onclick="publish()">발행하기</button>
+    <div id="status"></div>
+  </div>
+
+<script>
+const CFG_KEY = "briefing_admin_config_v1";
+
+function loadConfig() {
+  try {
+    const raw = localStorage.getItem(CFG_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function fillConfigForm() {
+  const cfg = loadConfig();
+  if (!cfg) return;
+  document.getElementById("cfg-owner").value = cfg.owner || "";
+  document.getElementById("cfg-repo").value = cfg.repo || "";
+  document.getElementById("cfg-branch").value = cfg.branch || "main";
+  document.getElementById("cfg-token").value = cfg.token || "";
+  document.getElementById("cfg-saved-msg").textContent = "저장된 설정을 불러왔습니다.";
+}
+
+function saveConfig() {
+  const cfg = {
+    owner: document.getElementById("cfg-owner").value.trim(),
+    repo: document.getElementById("cfg-repo").value.trim(),
+    branch: document.getElementById("cfg-branch").value.trim() || "main",
+    token: document.getElementById("cfg-token").value.trim(),
+  };
+  localStorage.setItem(CFG_KEY, JSON.stringify(cfg));
+  document.getElementById("cfg-saved-msg").textContent = "저장했습니다.";
+}
+
+function clearConfig() {
+  localStorage.removeItem(CFG_KEY);
+  document.getElementById("cfg-owner").value = "";
+  document.getElementById("cfg-repo").value = "";
+  document.getElementById("cfg-branch").value = "main";
+  document.getElementById("cfg-token").value = "";
+  document.getElementById("cfg-saved-msg").textContent = "지웠습니다.";
+}
+
+// UTF-8 안전 base64 인코딩/디코딩
+function b64EncodeUnicode(str) {
+  return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, (_, p1) =>
+    String.fromCharCode("0x" + p1)
+  ));
+}
+function b64DecodeUnicode(str) {
+  const clean = str.replace(/\n/g, "");
+  return decodeURIComponent(
+    atob(clean)
+      .split("")
+      .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+      .join("")
+  );
+}
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result;
+      resolve(result.split(",")[1]);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function setStatus(msg, type) {
+  const el = document.getElementById("status");
+  el.textContent = msg;
+  el.className = type || "";
+}
+
+async function githubGet(cfg, path) {
+  const res = await fetch(
+    `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/contents/${path}?ref=${cfg.branch}`,
+    { headers: { Authorization: `token ${cfg.token}`, Accept: "application/vnd.github+json" } }
+  );
+  if (!res.ok) throw new Error(`${path} 조회 실패 (${res.status}): ${await res.text()}`);
+  return res.json();
+}
+
+async function githubPut(cfg, path, contentBase64, message, sha) {
+  const body = {
+    message,
+    content: contentBase64,
+    branch: cfg.branch,
+  };
+  if (sha) body.sha = sha;
+  const res = await fetch(
+    `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/contents/${path}`,
+    {
+      method: "PUT",
+      headers: {
+        Authorization: `token ${cfg.token}`,
+        Accept: "application/vnd.github+json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    }
+  );
+  if (!res.ok) throw new Error(`${path} 저장 실패 (${res.status}): ${await res.text()}`);
+  return res.json();
+}
+
+async function publish() {
+  const cfg = loadConfig();
+  const btn = document.getElementById("publish-btn");
+
+  if (!cfg || !cfg.owner || !cfg.repo || !cfg.token) {
+    setStatus("먼저 ① 저장소 연결 정보를 저장해주세요.", "err");
+    return;
+  }
+
+  const date = document.getElementById("f-date").value;
+  const title = document.getElementById("f-title").value.trim();
+  const subtitle = document.getElementById("f-subtitle").value.trim();
+  const summary = document.getElementById("f-summary").value.trim();
+  const tagsRaw = document.getElementById("f-tags").value.trim();
+  const pdf = document.getElementById("f-pdf").value.trim();
+  const thumbFile = document.getElementById("f-thumb").files[0];
+
+  if (!date || !title || !summary || !pdf) {
+    setStatus("날짜·제목·요약·PDF 링크는 필수예요.", "err");
+    return;
+  }
+
+  const tags = tagsRaw
+    ? tagsRaw.split(",").map((t) => t.trim()).filter(Boolean)
+    : [];
+
+  btn.disabled = true;
+  setStatus("발행 중...", "");
+
+  try {
+    let thumbPath = null;
+
+    if (thumbFile) {
+      setStatus("썸네일 이미지 업로드 중...", "");
+      const ext = (thumbFile.name.split(".").pop() || "jpg").toLowerCase();
+      thumbPath = `assets/thumbs/${date}.${ext}`;
+      const base64 = await fileToBase64(thumbFile);
+      let existingSha = null;
+      try {
+        const existing = await githubGet(cfg, thumbPath);
+        existingSha = existing.sha;
+      } catch {
+        // 파일이 없으면 새로 생성 — 정상 상황
+      }
+      await githubPut(cfg, thumbPath, base64, `썸네일 추가: ${date}`, existingSha);
+    }
+
+    setStatus("posts.js 갱신 중...", "");
+    const postsFile = await githubGet(cfg, "assets/posts.js");
+    const currentText = b64DecodeUnicode(postsFile.content);
+
+    const entryObj = {
+      date,
+      title,
+      subtitle: subtitle || null,
+      summary,
+      tags,
+      pdf,
+      thumb: thumbPath,
+    };
+
+    const entryText =
+      "  {\n" +
+      `    date: ${JSON.stringify(entryObj.date)},\n` +
+      `    title: ${JSON.stringify(entryObj.title)},\n` +
+      `    subtitle: ${entryObj.subtitle === null ? "null" : JSON.stringify(entryObj.subtitle)},\n` +
+      `    summary: ${JSON.stringify(entryObj.summary)},\n` +
+      `    tags: ${JSON.stringify(entryObj.tags)},\n` +
+      `    pdf: ${JSON.stringify(entryObj.pdf)},\n` +
+      `    thumb: ${entryObj.thumb === null ? "null" : JSON.stringify(entryObj.thumb)},\n` +
+      "  },\n";
+
+    const marker = /(const POSTS = \[\r?\n)/;
+    if (!marker.test(currentText)) {
+      throw new Error("posts.js에서 'const POSTS = [' 구문을 찾지 못했습니다. 파일 구조가 바뀌었는지 확인해주세요.");
+    }
+    const updatedText = currentText.replace(marker, `$1${entryText}`);
+    const updatedBase64 = b64EncodeUnicode(updatedText);
+
+    await githubPut(
+      cfg,
+      "assets/posts.js",
+      updatedBase64,
+      `브리핑 추가: ${date} ${title}`,
+      postsFile.sha
+    );
+
+    setStatus(
+      `발행 완료! "${title}" (${date})\n1~2분 뒤 사이트에서 확인해보세요.`,
+      "ok"
+    );
+    document.getElementById("f-title").value = "";
+    document.getElementById("f-subtitle").value = "";
+    document.getElementById("f-summary").value = "";
+    document.getElementById("f-tags").value = "";
+    document.getElementById("f-pdf").value = "";
+    document.getElementById("f-thumb").value = "";
+  } catch (err) {
+    setStatus("오류: " + err.message, "err");
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  fillConfigForm();
+  document.getElementById("f-date").value = new Date().toISOString().slice(0, 10);
+});
+</script>
+</body>
+</html>
