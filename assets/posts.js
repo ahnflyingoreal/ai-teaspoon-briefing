@@ -15,6 +15,15 @@
 
 const POSTS = [
   {
+    date: "2026-07-22",
+    title: "AI 시대, 무엇을 남길까?",
+    subtitle: "유아교육이 지켜야 할 힘",
+    summary: "미래를 맞히는 교육보다 변화 속에서도 스스로 묻고, 함께 해결하고, 다시 배우는 힘을\n기르는 교육이 필요합니다.",
+    tags: [],
+    pdf: "https://drive.google.com/file/d/1F6aErJVuaz3zfEMmDU6YxBsOkkftuzV0/view?usp=sharing",
+    thumb: "assets/thumbs/2026-07-22.pdf",
+  },
+  {
     date: "2026-07-23",
     title: "AI, 막상 써 보니 어렵지 않았다",
     subtitle: "“이 정도면 나도 쓰겠네”",
