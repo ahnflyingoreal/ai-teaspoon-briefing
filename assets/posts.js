@@ -15,6 +15,15 @@
 
 const POSTS = [
   {
+    date: "2026-07-20",
+    title: "아이에게 AI를 건네기 전, 교사의 기준",
+    subtitle: null,
+    summary: "유아교육 현장에서 AI를 도입할 때는 신기한 기능보다 개인정보 보호와 교사의 통제력, 주도권 유지가 우선되어야 합니다. 교사는 AI를 대체재가 아닌 보조 도구로 활용하며, 교육적 의도 안에서 안전하고 균형 있게 설계해야 합니다.",
+    tags: ["유아교육AI","교사전문성","디지털기준"],
+    pdf: "https://drive.google.com/file/d/1susGHZlREkdz1aElyttl9DpZkN6FHi7T/view?usp=sharing",
+    thumb: "assets/thumbs/2026-07-20.jpg",
+  },
+  {
     date: "2026-07-22",
     title: "AI 시대, 유아교육이 지켜야 할 힘",
     subtitle: "기술의 속도가 곧 교육의 속도는 아닙니다",
