@@ -24,21 +24,11 @@ const POSTS = [
     thumb: null,
   },
   {
-    date: "2026-07-22",
-    title: "AI 시대, 무엇을 남길까?",
-    subtitle: "유아교육이 지켜야 할 힘",
-    summary: "미래를 맞히는 교육보다 변화 속에서도 스스로 묻고, 함께 해결하고, 다시 배우는 힘을\n기르는 교육이 필요합니다.",
-    tags: [],
-    pdf: "https://drive.google.com/file/d/1F6aErJVuaz3zfEMmDU6YxBsOkkftuzV0/view?usp=sharing",
-    thumb: "assets/thumbs/2026-07-22.pdf",
-  },
-  {
     date: "2026-07-23",
     title: "AI, 막상 써 보니 어렵지 않았다",
     subtitle: "“이 정도면 나도 쓰겠네”",
-    summary:
-      "교사가 AI를 계속 쓰게 만든 건 화려한 기능이 아니라 “내 일에 써보니 쓸 만하다”는 작은 성공 경험이었다. 현직 유아교사 270명, 434명 워크숍 사례를 통해 자기효능감과 좋은 피드백의 조건을 살펴본다.",
-    tags: ["일일 브리핑", "AI 자기효능감", "좋은 피드백", "연구회 실천"],
+    summary: "교사가 AI를 계속 쓰게 만든 건 화려한 기능이 아니라 “내 일에 써보니 쓸 만하다”는 작은 성공 경험이었다. 현직 유아교사 270명, 434명 워크숍 사례를 통해 자기효능감과 좋은 피드백의 조건을 살펴본다.",
+    tags: ["일일 브리핑","AI 자기효능감","좋은 피드백","연구회 실천"],
     pdf: "pdfs/2026-07-23.pdf",
     thumb: "assets/thumbs/2026-07-23.jpg",
   },
@@ -46,21 +36,9 @@ const POSTS = [
     date: "2026-07-21",
     title: "AI 기업 ‘업무 플랫폼’ 전쟁 예고",
     subtitle: null,
-    summary:
-      "Anthropic과 OpenAI가 교사 전용 AI 생태계를 경쟁적으로 내놓기 시작했다. 한편 유아교육 연구는 AI의 효과보다 교사의 검토, 아이의 AI 이해, 사람과의 관계를 더 깊게 묻는다.",
-    tags: ["일일 브리핑", "AI 교육", "유아교육", "교사 연구회"],
+    summary: "Anthropic과 OpenAI가 교사 전용 AI 생태계를 경쟁적으로 내놓기 시작했다. 한편 유아교육 연구는 AI의 효과보다 교사의 검토, 아이의 AI 이해, 사람과의 관계를 더 깊게 묻는다.",
+    tags: ["일일 브리핑","AI 교육","유아교육","교사 연구회"],
     pdf: "pdfs/2026-07-21.pdf",
     thumb: "assets/thumbs/2026-07-21.jpg",
   },
-
-  // ↓ 구글 드라이브 링크를 쓸 때의 예시 (필요할 때 이 형태로 복사해서 쓰세요)
-  // {
-  //   date: "2026-07-24",
-  //   title: "오늘 브리핑 제목",
-  //   subtitle: null,
-  //   summary: "두세 문장짜리 소개 글.",
-  //   tags: ["일일 브리핑", "태그2", "태그3"],
-  //   pdf: "https://drive.google.com/file/d/여기에_긴_ID/view?usp=sharing",
-  //   thumb: "assets/thumbs/2026-07-24.jpg",   // 없으면 null
-  // },
 ];
