@@ -15,6 +15,15 @@
 
 const POSTS = [
   {
+    date: "2026-07-24",
+    title: "AI 시대, 교사의 첫 판단이 중요한 이유",
+    subtitle: "내가 먼저 생각하고, AI는 옆에서 돕는다",
+    summary: "AI가 제시하는 결과나 점수에 휩쓸리지 않고, 교사가 먼저 아이의 행동과 기록을 관찰하고 판단하는 과정의 중요성을 다룹니다. 교사의 주체적인 시각과 비판적 사고가 유아 AI 교육에서 왜 필수적인지 안내합니다.",
+    tags: ["유아AI교육","교사판단","리터러시"],
+    pdf: "https://drive.google.com/file/d/1nJjVXqW_0aG3ORGs3JRxShV8lOe1K0wJ/view?usp=sharing",
+    thumb: "assets/thumbs/2026-07-24.jpg",
+  },
+  {
     date: "2026-07-20",
     title: "아이에게 AI를 건네기 전, 교사의 기준",
     subtitle: null,
